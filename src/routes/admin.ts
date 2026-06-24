@@ -238,7 +238,7 @@ router.post(
   }),
 );
 
-const VALID_POLICY_TYPES: PolicyType[] = ['privacy-policy', 'terms-of-service'];
+const VALID_POLICY_TYPES: PolicyType[] = ['privacy-policy', 'terms-of-service', 'about-us', 'our-team'];
 
 /**
  * GET /api/admin/pages/:type
