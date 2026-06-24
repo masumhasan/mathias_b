@@ -20,6 +20,7 @@ import { requireAuth } from '../middleware/requireAuth';
 import { requireAdmin } from '../middleware/requireAdmin';
 import { emailSyncService } from '../services/emailSyncService';
 import { PolicyPage, PolicyType } from '../models/PolicyPage';
+import { Service } from '../models/Service';
 
 const router = Router();
 
@@ -270,6 +271,63 @@ router.post(
       { upsert: true, new: true },
     );
     res.json({ message: 'Saved.', updatedAt: page.updatedAt });
+  }),
+);
+
+// ── Service Manager ──────────────────────────────────────────────────────────
+
+const ServiceSchema = z.object({
+  name: z.string().trim().min(1).max(200),
+  slug: z.string().trim().min(1).max(200).regex(/^[a-z0-9-]+$/, 'Slug must be lowercase letters, numbers and hyphens only'),
+  content: z.string().default(''),
+  order: z.number().int().default(0),
+});
+
+/** GET /api/admin/services */
+router.get(
+  '/services',
+  asyncHandler(async (_req: Request, res: Response) => {
+    const services = await Service.find().sort({ order: 1, createdAt: 1 }).lean();
+    res.json({ services });
+  }),
+);
+
+/** POST /api/admin/services */
+router.post(
+  '/services',
+  asyncHandler(async (req: Request, res: Response) => {
+    const body = ServiceSchema.parse(req.body);
+    const existing = await Service.findOne({ slug: body.slug });
+    if (existing) throw createError('A service with this slug already exists.', 409);
+    const service = await Service.create(body);
+    res.status(201).json({ service });
+  }),
+);
+
+/** PATCH /api/admin/services/:id */
+router.patch(
+  '/services/:id',
+  asyncHandler(async (req: Request, res: Response) => {
+    if (!mongoose.isValidObjectId(req.params.id)) throw createError('Invalid ID.', 400);
+    const body = ServiceSchema.partial().parse(req.body);
+    if (body.slug) {
+      const conflict = await Service.findOne({ slug: body.slug, _id: { $ne: req.params.id } });
+      if (conflict) throw createError('A service with this slug already exists.', 409);
+    }
+    const service = await Service.findByIdAndUpdate(req.params.id, body, { new: true });
+    if (!service) throw createError('Service not found.', 404);
+    res.json({ service });
+  }),
+);
+
+/** DELETE /api/admin/services/:id */
+router.delete(
+  '/services/:id',
+  asyncHandler(async (req: Request, res: Response) => {
+    if (!mongoose.isValidObjectId(req.params.id)) throw createError('Invalid ID.', 400);
+    const service = await Service.findByIdAndDelete(req.params.id);
+    if (!service) throw createError('Service not found.', 404);
+    res.status(204).send();
   }),
 );
 
