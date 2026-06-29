@@ -4,7 +4,7 @@ import { asyncHandler, createError } from '../middleware/errorHandler';
 
 const router = Router();
 
-const VALID_TYPES: PolicyType[] = ['privacy-policy', 'terms-of-service', 'about-us', 'our-team'];
+const VALID_TYPES: PolicyType[] = ['privacy-policy', 'terms-of-service', 'about-us', 'our-team', 'how-it-works'];
 
 router.get(
   '/:type',

@@ -1,6 +1,6 @@
 import mongoose, { Schema, Document } from 'mongoose';
 
-export type PolicyType = 'privacy-policy' | 'terms-of-service' | 'about-us' | 'our-team';
+export type PolicyType = 'privacy-policy' | 'terms-of-service' | 'about-us' | 'our-team' | 'how-it-works';
 
 export interface IPolicyPage extends Document {
   type: PolicyType;
@@ -10,7 +10,7 @@ export interface IPolicyPage extends Document {
 
 const PolicyPageSchema = new Schema<IPolicyPage>(
   {
-    type: { type: String, enum: ['privacy-policy', 'terms-of-service', 'about-us', 'our-team'], required: true, unique: true },
+    type: { type: String, enum: ['privacy-policy', 'terms-of-service', 'about-us', 'our-team', 'how-it-works'], required: true, unique: true },
     content: { type: String, default: '' },
   },
   { timestamps: true },
