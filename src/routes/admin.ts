@@ -435,18 +435,18 @@ router.post(
   requireAdmin,
   asyncHandler(async (_req: Request, res: Response) => {
     const packages = await Package.find();
-    const results: { tier: string; stripePriceId: string; stripeProductId: string }[] = [];
+    const results: { tier: string; stripePriceId: string; stripeProductId: string | undefined }[] = [];
 
     for (const pkg of packages) {
       // Create or update Stripe Product.
       // If the stored product was deleted in Stripe, fall through to create a fresh one.
-      let productId: string | null = pkg.stripeProductId ?? null;
+      let productId: string | undefined = pkg.stripeProductId ?? undefined;
       if (productId) {
         try {
           await stripe.products.update(productId, { name: pkg.name, description: pkg.description });
         } catch {
           // Product no longer exists in Stripe — recreate it
-          productId = null;
+          productId = undefined;
           pkg.stripePriceId = undefined; // old price is gone too
         }
       }
