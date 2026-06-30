@@ -31,6 +31,9 @@ export interface PublicUser {
   emailVerified: boolean;
   subscriptionPlan: string;
   subscribedAt?: Date;
+  subscriptionStatus: string;
+  currentPeriodEnd?: Date;
+  cancelAtPeriodEnd: boolean;
 }
 
 export interface UpdateProfileInput {
@@ -56,6 +59,9 @@ function toPublicUser(user: IUser): PublicUser {
     emailVerified: user.emailVerified,
     subscriptionPlan: user.subscriptionPlan ?? 'none',
     subscribedAt: user.subscribedAt,
+    subscriptionStatus: user.subscriptionStatus ?? 'none',
+    currentPeriodEnd: user.currentPeriodEnd,
+    cancelAtPeriodEnd: user.cancelAtPeriodEnd ?? false,
   };
 }
 

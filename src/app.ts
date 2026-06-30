@@ -11,6 +11,8 @@ import adminRoutes from './routes/admin';
 import clientChatRoutes from './routes/clientChat';
 import pagesRoutes from './routes/pages';
 import servicesRoutes from './routes/services';
+import stripeRoutes from './routes/stripe';
+import { stripeWebhookHandler } from './routes/stripeWebhook';
 
 const app = express();
 
@@ -41,6 +43,9 @@ app.use(
   }),
 );
 
+// ── Stripe webhook MUST receive raw body — register before express.json() ──
+app.post('/api/stripe/webhook', express.raw({ type: 'application/json' }), stripeWebhookHandler);
+
 app.use(express.json({ limit: '100kb' }));
 app.use(express.urlencoded({ extended: false, limit: '100kb' }));
 app.use(requestLogger);
@@ -53,6 +58,7 @@ app.use('/api/admin', adminRoutes);
 app.use('/api/client-chat', clientChatRoutes);
 app.use('/api/pages', pagesRoutes);
 app.use('/api/services', servicesRoutes);
+app.use('/api/stripe', stripeRoutes);
 
 app.get('/', (_req, res) => {
   const dbState = ['disconnected', 'connected', 'connecting', 'disconnecting'];

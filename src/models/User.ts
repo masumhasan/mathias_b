@@ -23,6 +23,13 @@ export interface IUser extends Document {
   resetOtpAttempts: number;
   subscriptionPlan: SubscriptionTier | 'none';
   subscribedAt?: Date;
+  // Stripe
+  stripeCustomerId?: string;
+  stripeSubscriptionId?: string;
+  stripePriceId?: string;
+  subscriptionStatus: 'none' | 'active' | 'canceled' | 'past_due' | 'incomplete' | 'trialing';
+  currentPeriodEnd?: Date;
+  cancelAtPeriodEnd: boolean;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -48,6 +55,12 @@ const UserSchema = new Schema<IUser>(
     resetOtpAttempts: { type: Number, default: 0 },
     subscriptionPlan: { type: String, enum: ['none', 'silver', 'gold', 'platinum'], default: 'none' },
     subscribedAt: { type: Date },
+    stripeCustomerId: { type: String, index: true },
+    stripeSubscriptionId: { type: String },
+    stripePriceId: { type: String },
+    subscriptionStatus: { type: String, enum: ['none', 'active', 'canceled', 'past_due', 'incomplete', 'trialing'], default: 'none' },
+    currentPeriodEnd: { type: Date },
+    cancelAtPeriodEnd: { type: Boolean, default: false },
   },
   { timestamps: true },
 );

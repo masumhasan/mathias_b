@@ -7,6 +7,8 @@ export interface IPackage extends Document {
   price: number;
   description: string;
   tier: SubscriptionTier;
+  stripeProductId?: string;
+  stripePriceId?: string;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -17,6 +19,8 @@ const PackageSchema = new Schema<IPackage>(
     price: { type: Number, required: true, min: 0 },
     description: { type: String, required: true, trim: true },
     tier: { type: String, enum: ['silver', 'gold', 'platinum'], required: true },
+    stripeProductId: { type: String },
+    stripePriceId: { type: String },
   },
   { timestamps: true },
 );

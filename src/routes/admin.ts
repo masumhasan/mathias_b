@@ -21,6 +21,9 @@ import { requireAdmin } from '../middleware/requireAdmin';
 import { emailSyncService } from '../services/emailSyncService';
 import { PolicyPage, PolicyType } from '../models/PolicyPage';
 import { Service } from '../models/Service';
+import { Package } from '../models/Package';
+import { User } from '../models/User';
+import { stripe } from '../services/stripeService';
 
 const router = Router();
 
@@ -328,6 +331,182 @@ router.delete(
     const service = await Service.findByIdAndDelete(req.params.id);
     if (!service) throw createError('Service not found.', 404);
     res.status(204).send();
+  }),
+);
+
+// ── Subscribers list ──────────────────────────────────────────────────────────
+
+/**
+ * GET /api/admin/subscribers
+ * Returns all users who have ever had a subscription plan, with their
+ * current plan, status, amount paid (from the package price), and dates.
+ */
+router.get(
+  '/subscribers',
+  requireAuth,
+  requireAdmin,
+  asyncHandler(async (_req: Request, res: Response) => {
+    const subscribers = await User.find({
+      subscriptionPlan: { $ne: 'none' },
+      stripeSubscriptionId: { $exists: true, $ne: null },
+    })
+      .select('firstName lastName email subscriptionPlan subscriptionStatus subscribedAt currentPeriodEnd cancelAtPeriodEnd stripeSubscriptionId')
+      .sort({ subscribedAt: -1 })
+      .lean();
+
+    // Load packages once for price lookup
+    const packages = await Package.find().lean();
+    const priceByTier: Record<string, number> = {};
+    packages.forEach((p) => { priceByTier[p.tier] = p.price; });
+
+    const result = subscribers.map((u) => ({
+      id: (u._id as { toString(): string }).toString(),
+      name: `${u.firstName} ${u.lastName}`.trim(),
+      email: u.email,
+      plan: u.subscriptionPlan,
+      status: u.subscriptionStatus ?? 'none',
+      amount: priceByTier[u.subscriptionPlan] ?? null,
+      subscribedAt: u.subscribedAt ?? null,
+      currentPeriodEnd: u.currentPeriodEnd ?? null,
+      cancelAtPeriodEnd: u.cancelAtPeriodEnd ?? false,
+    }));
+
+    res.json({ subscribers: result, total: result.length });
+  }),
+);
+
+// ── Stripe revenue stats ──────────────────────────────────────────────────────
+
+/**
+ * GET /api/admin/stripe/revenue-stats
+ * Returns total revenue (all time), this month's revenue, and total subscriber count.
+ */
+router.get(
+  '/stripe/revenue-stats',
+  requireAuth,
+  requireAdmin,
+  asyncHandler(async (_req: Request, res: Response) => {
+    // Active subscribers (paid + currently active status)
+    const totalSubscribers = await User.countDocuments({
+      subscriptionStatus: 'active',
+      stripeSubscriptionId: { $exists: true, $ne: null },
+    });
+
+    // Pull paid invoices from Stripe (up to 100 per page, accumulate)
+    let totalRevenueCents = 0;
+    let thisMonthCents = 0;
+    const now = new Date();
+    const monthStart = Math.floor(new Date(now.getFullYear(), now.getMonth(), 1).getTime() / 1000);
+
+    let hasMore = true;
+    let startingAfter: string | undefined;
+    while (hasMore) {
+      const invoices = await stripe.invoices.list({
+        status: 'paid',
+        limit: 100,
+        ...(startingAfter ? { starting_after: startingAfter } : {}),
+      });
+      for (const inv of invoices.data) {
+        totalRevenueCents += inv.amount_paid;
+        if (inv.created >= monthStart) thisMonthCents += inv.amount_paid;
+      }
+      hasMore = invoices.has_more;
+      if (invoices.data.length > 0) startingAfter = invoices.data[invoices.data.length - 1].id;
+    }
+
+    res.json({
+      totalRevenue: totalRevenueCents / 100,
+      thisMonthRevenue: thisMonthCents / 100,
+      totalSubscribers,
+    });
+  }),
+);
+
+// ── Stripe: Sync packages to Stripe products/prices ─────────────────────────
+
+/**
+ * POST /api/admin/stripe/sync
+ * Creates or updates Stripe Products and Prices for all packages,
+ * then stores the Stripe IDs back in the Package documents.
+ */
+router.post(
+  '/stripe/sync',
+  requireAuth,
+  requireAdmin,
+  asyncHandler(async (_req: Request, res: Response) => {
+    const packages = await Package.find();
+    const results: { tier: string; stripePriceId: string; stripeProductId: string }[] = [];
+
+    for (const pkg of packages) {
+      // Create or update Stripe Product.
+      // If the stored product was deleted in Stripe, fall through to create a fresh one.
+      let productId: string | null = pkg.stripeProductId ?? null;
+      if (productId) {
+        try {
+          await stripe.products.update(productId, { name: pkg.name, description: pkg.description });
+        } catch {
+          // Product no longer exists in Stripe — recreate it
+          productId = null;
+          pkg.stripePriceId = undefined; // old price is gone too
+        }
+      }
+      if (!productId) {
+        const product = await stripe.products.create({
+          name: pkg.name,
+          description: pkg.description,
+          metadata: { tier: pkg.tier },
+        });
+        productId = product.id;
+      }
+
+      // Always create a new Price (prices are immutable in Stripe)
+      // Archive the old one if it exists
+      if (pkg.stripePriceId) {
+        try {
+          await stripe.prices.update(pkg.stripePriceId, { active: false });
+        } catch {
+          // Price may already be archived — ignore
+        }
+      }
+
+      const price = await stripe.prices.create({
+        product: productId,
+        unit_amount: Math.round(pkg.price * 100), // cents
+        currency: 'eur',
+        recurring: { interval: 'month' },
+        metadata: { tier: pkg.tier },
+      });
+
+      pkg.stripeProductId = productId;
+      pkg.stripePriceId = price.id;
+      await pkg.save();
+
+      results.push({ tier: pkg.tier, stripeProductId: productId, stripePriceId: price.id });
+    }
+
+    res.json({ synced: results.length, results });
+  }),
+);
+
+/**
+ * GET /api/admin/stripe/sync-status
+ * Returns which packages have been synced to Stripe.
+ */
+router.get(
+  '/stripe/sync-status',
+  requireAuth,
+  requireAdmin,
+  asyncHandler(async (_req: Request, res: Response) => {
+    const packages = await Package.find().select('name tier stripePriceId stripeProductId').lean();
+    res.json({
+      packages: packages.map((p) => ({
+        tier: p.tier,
+        name: p.name,
+        synced: !!(p.stripePriceId && p.stripeProductId),
+        stripePriceId: p.stripePriceId ?? null,
+        stripeProductId: p.stripeProductId ?? null,
+      })),
+    });
   }),
 );
 
