@@ -20,6 +20,7 @@ import { requireAuth } from '../middleware/requireAuth';
 import { requireAdmin } from '../middleware/requireAdmin';
 import { emailSyncService } from '../services/emailSyncService';
 import { PolicyPage, PolicyType } from '../models/PolicyPage';
+import { ContactInfo } from '../models/ContactInfo';
 import { Service } from '../models/Service';
 import { Package } from '../models/Package';
 import { User } from '../models/User';
@@ -242,7 +243,45 @@ router.post(
   }),
 );
 
-const VALID_POLICY_TYPES: PolicyType[] = ['privacy-policy', 'terms-of-service', 'about-us', 'our-team', 'how-it-works'];
+const VALID_POLICY_TYPES: PolicyType[] = ['privacy-policy', 'terms-of-service', 'about-us', 'our-team', 'how-it-works', 'imprint'];
+
+const AdminContactInfoSchema = z.object({
+  address: z.string().trim().min(1),
+  email: z.string().trim().email(),
+});
+
+/**
+ * GET /api/admin/contact-info
+ */
+router.get(
+  '/contact-info',
+  asyncHandler(async (req: Request, res: Response) => {
+    let contact = await ContactInfo.findOne();
+    if (!contact) {
+      contact = await ContactInfo.create({
+        address: '30 N Gould St, Ste N\nSheridan, WY 82801 USA',
+        email: 'supporteuvisa@gmail.com',
+      });
+    }
+    res.json(contact);
+  }),
+);
+
+/**
+ * POST /api/admin/contact-info
+ */
+router.post(
+  '/contact-info',
+  asyncHandler(async (req: Request, res: Response) => {
+    const { address, email } = AdminContactInfoSchema.parse(req.body);
+    const contact = await ContactInfo.findOneAndUpdate(
+      {},
+      { address, email },
+      { upsert: true, new: true },
+    );
+    res.json({ message: 'Saved.', updatedAt: contact.updatedAt });
+  }),
+);
 
 /**
  * GET /api/admin/pages/:type
