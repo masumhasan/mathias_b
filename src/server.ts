@@ -8,7 +8,7 @@ import { seedSuperAdmin } from './services/seedAdminService';
 import logger from './utils/logger';
 
 const PORT = parseInt(process.env.PORT || '3005', 10);
-const SYNC_SCHEDULE = process.env.SYNC_SCHEDULE || '0 * * * *'; // Every hour
+const SYNC_SCHEDULE = process.env.SYNC_SCHEDULE || '0 0 * * *'; // Every 24 hours (daily at midnight)
 
 async function start(): Promise<void> {
   await connectDatabase();
@@ -31,7 +31,7 @@ async function start(): Promise<void> {
     logger.error('Initial sync error', { error: err.message }),
   );
 
-  // Hourly recurring sync
+  // 24-hour recurring sync
   cron.schedule(SYNC_SCHEDULE, () => {
     logger.info('Scheduled sync triggered');
     emailSyncService.sync().catch((err: Error) =>
