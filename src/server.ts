@@ -25,21 +25,27 @@ async function start(): Promise<void> {
     });
   });
 
-  // Initial sync on startup — runs in background, does not block server start
-  logger.info('Starting initial email sync...');
-  emailSyncService.sync().catch((err: Error) =>
-    logger.error('Initial sync error', { error: err.message }),
-  );
+  const emailSyncEnabled = process.env.EMAIL_SYNC_ENABLED === 'true';
 
-  // 24-hour recurring sync
-  cron.schedule(SYNC_SCHEDULE, () => {
-    logger.info('Scheduled sync triggered');
+  if (emailSyncEnabled) {
+    // Initial sync on startup — runs in background, does not block server start
+    logger.info('Starting initial email sync...');
     emailSyncService.sync().catch((err: Error) =>
-      logger.error('Scheduled sync error', { error: err.message }),
+      logger.error('Initial sync error', { error: err.message }),
     );
-  });
 
-  logger.info(`Email sync scheduled: ${SYNC_SCHEDULE}`);
+    // 24-hour recurring sync
+    cron.schedule(SYNC_SCHEDULE, () => {
+      logger.info('Scheduled sync triggered');
+      emailSyncService.sync().catch((err: Error) =>
+        logger.error('Scheduled sync error', { error: err.message }),
+      );
+    });
+
+    logger.info(`Email sync scheduled: ${SYNC_SCHEDULE}`);
+  } else {
+    logger.info('Email sync is disabled via EMAIL_SYNC_ENABLED configuration');
+  }
 
   // Graceful shutdown — synchronous signal handler, disconnect happens inside server.close callback
   const shutdown = (signal: string): void => {

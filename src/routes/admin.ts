@@ -233,6 +233,10 @@ router.delete(
 router.post(
   '/repair-email-bodies',
   asyncHandler(async (_req: Request, res: Response) => {
+    if (process.env.EMAIL_SYNC_ENABLED !== 'true') {
+      res.status(403).json({ error: 'Email sync/repair is disabled via configuration.' });
+      return;
+    }
     if (emailSyncService.repairing) {
       res.status(409).json({ error: 'Body repair already in progress.' });
       return;

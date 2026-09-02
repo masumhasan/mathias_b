@@ -58,6 +58,10 @@ router.post(
 router.post(
   '/sync',
   asyncHandler(async (_req: Request, res: Response) => {
+    if (process.env.EMAIL_SYNC_ENABLED !== 'true') {
+      res.status(403).json({ error: 'Email sync is disabled via configuration' });
+      return;
+    }
     if (emailSyncService.syncing) {
       res.status(409).json({ error: 'Sync already in progress' });
       return;
