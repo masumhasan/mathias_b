@@ -16,6 +16,9 @@ import { stripeWebhookHandler } from './routes/stripeWebhook';
 
 const app = express();
 
+// Trust the first proxy (e.g., AWS ALB, Nginx) so rate limits use the real client IP
+app.set('trust proxy', 1);
+
 const allowedOrigins = process.env.ALLOWED_ORIGINS
   ? process.env.ALLOWED_ORIGINS.split(',').map((o) => o.trim())
   : ['http://localhost:5173', 'http://localhost:3000', 'http://localhost:3001'];
@@ -44,7 +47,7 @@ app.use(
 );
 
 // ── Stripe webhook MUST receive raw body — register before express.json() ──
-app.post('/api/stripe/webhook', express.raw({ type: 'application/json' }), stripeWebhookHandler);
+app.post('/api/stripe/webhook', express.raw({ type: '*/*' }), stripeWebhookHandler);
 
 app.use(express.json({ limit: '100kb' }));
 app.use(express.urlencoded({ extended: false, limit: '100kb' }));
