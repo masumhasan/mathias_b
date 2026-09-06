@@ -1,7 +1,7 @@
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { User, IUser } from '../models/User';
-import { getMailTransporter, MAIL_FROM } from '../config/mailer';
+import { getOtpTransporter, OTP_MAIL_FROM } from '../config/mailer';
 import { createError } from '../middleware/errorHandler';
 import logger from '../utils/logger';
 
@@ -91,9 +91,9 @@ export function verifyAuthToken(token: string): JwtPayload {
 }
 
 async function sendOtpEmail(to: string, otp: string): Promise<void> {
-  const transporter = getMailTransporter();
+  const transporter = getOtpTransporter();
   await transporter.sendMail({
-    from: MAIL_FROM,
+    from: OTP_MAIL_FROM,
     to,
     subject: 'Your EUVisaAdvice verification code',
     text: `Your verification code is ${otp}. It expires in 10 minutes.`,
@@ -102,9 +102,9 @@ async function sendOtpEmail(to: string, otp: string): Promise<void> {
 }
 
 async function sendPasswordResetEmail(to: string, otp: string): Promise<void> {
-  const transporter = getMailTransporter();
+  const transporter = getOtpTransporter();
   await transporter.sendMail({
-    from: MAIL_FROM,
+    from: OTP_MAIL_FROM,
     to,
     subject: 'Your EUVisaAdvice password reset code',
     text: `Your password reset code is ${otp}. It expires in 10 minutes. If you did not request this, you can ignore this email.`,

@@ -1,6 +1,7 @@
 import nodemailer, { Transporter } from 'nodemailer';
 
 let _transporter: Transporter | null = null;
+let _otpTransporter: Transporter | null = null;
 
 export function getMailTransporter(): Transporter {
   if (!_transporter) {
@@ -19,4 +20,22 @@ export function getMailTransporter(): Transporter {
   return _transporter;
 }
 
+export function getOtpTransporter(): Transporter {
+  if (!_otpTransporter) {
+    const user = process.env.OTP_EMAIL;
+    const pass = process.env.OTP_APP_PASSWORD;
+    if (!user || !pass) throw new Error('OTP_EMAIL and OTP_APP_PASSWORD must be defined in environment');
+
+    _otpTransporter = nodemailer.createTransport({
+      host: 'smtp.gmail.com',
+      port: 587,
+      secure: false,
+      requireTLS: true,
+      auth: { user, pass },
+    });
+  }
+  return _otpTransporter;
+}
+
 export const MAIL_FROM = process.env.EMAIL || '';
+export const OTP_MAIL_FROM = process.env.OTP_EMAIL || '';
