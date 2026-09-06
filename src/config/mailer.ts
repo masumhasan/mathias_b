@@ -28,9 +28,8 @@ export function getOtpTransporter(): Transporter {
 
     _otpTransporter = nodemailer.createTransport({
       host: 'smtp.gmail.com',
-      port: 587,
-      secure: false,
-      requireTLS: true,
+      port: 465,
+      secure: true,
       auth: { user, pass },
     });
   }
