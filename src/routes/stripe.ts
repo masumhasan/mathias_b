@@ -65,7 +65,7 @@ router.post(
       mode: 'subscription',
       customer: customerId,
       line_items: [{ price: pkg.stripePriceId, quantity: 1 }],
-      success_url: `${FRONTEND_URL}/subscribe?payment=success&tier=${tier}&session_id={CHECKOUT_SESSION_ID}`,
+      success_url: `${FRONTEND_URL}/thank-you?session_id={CHECKOUT_SESSION_ID}&tier=${tier}`,
       cancel_url: `${FRONTEND_URL}/subscribe?payment=canceled`,
       subscription_data: {
         metadata: { userId: user._id.toString(), tier },
@@ -107,7 +107,7 @@ router.post(
  * POST /api/stripe/verify-session
  * Called right after Stripe checkout redirects back with ?session_id=xxx.
  * Retrieves the exact completed checkout session from Stripe, confirms payment,
- * and immediately writes the subscription into the user record.
+ * writes the subscription into the user record, and returns order confirmation details.
  */
 router.post(
   '/verify-session',
@@ -147,21 +147,46 @@ router.post(
       return;
     }
 
+    const pkg = await Package.findOne({ tier }).lean();
     const periodEnd = (sub as unknown as { current_period_end: number }).current_period_end;
 
-    await User.findByIdAndUpdate(req.userId, {
-      stripeCustomerId: session.customer as string,
-      stripeSubscriptionId: sub.id,
-      stripePriceId: priceId,
-      subscriptionPlan: tier,
-      subscriptionStatus: 'active',
-      currentPeriodEnd: periodEnd ? new Date(periodEnd * 1000) : undefined,
-      cancelAtPeriodEnd: sub.cancel_at_period_end ?? false,
-      subscribedAt: new Date(),
-    });
+    const user = await User.findByIdAndUpdate(
+      req.userId,
+      {
+        stripeCustomerId: session.customer as string,
+        stripeSubscriptionId: sub.id,
+        stripePriceId: priceId,
+        subscriptionPlan: tier,
+        subscriptionStatus: 'active',
+        currentPeriodEnd: periodEnd ? new Date(periodEnd * 1000) : undefined,
+        cancelAtPeriodEnd: sub.cancel_at_period_end ?? false,
+        subscribedAt: new Date(),
+      },
+      { new: true },
+    ).select('email firstName lastName');
+
+    const amount = session.amount_total != null ? session.amount_total / 100 : (pkg?.price ?? 0);
+    const currency = (session.currency ?? 'eur').toUpperCase();
+    const customerDetails = session.customer_details;
+    const customerEmail = customerDetails?.email || user?.email || '';
+    const customerName = customerDetails?.name || `${user?.firstName ?? ''} ${user?.lastName ?? ''}`.trim();
+
+    const order = {
+      sessionId: session.id,
+      subscriptionId: sub.id,
+      tier,
+      tierName: pkg?.name || `${tier.charAt(0).toUpperCase() + tier.slice(1)} Pack`,
+      amount,
+      currency,
+      customerEmail,
+      customerName,
+      status: 'paid',
+      interval: 'month',
+      date: new Date((session.created || Math.floor(Date.now() / 1000)) * 1000).toISOString(),
+    };
 
     console.log(`[Stripe] User ${req.userId} subscribed to ${tier} via session ${sessionId}`);
-    res.json({ synced: true, tier });
+    res.json({ synced: true, tier, order });
   }),
 );
 
